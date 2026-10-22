@@ -17,6 +17,7 @@ class PraktikumJadwalResource extends JsonResource
             'jam_selesai' => $this->jam_selesai?->format('H:i'),
             'is_active' => $this->is_active,
             'mahasiswa_count' => $this->mahasiswa_count ?? 0,
+            'praktikum' => new PraktikumResource($this->whenLoaded('praktikum')),
         ];
     }
 }
