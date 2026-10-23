@@ -32,9 +32,11 @@ return new class extends Migration
             $table->id();
             $table->timestamps();
             $table->string('nama');
-            $table->integer('nip')->unique();
+            $table->string('nip')->unique();
             $table->string('surel')->unique();
-            $table->string('pengampu');
+            $table->jsonb('kepakaran');
+            $table->jsonb('pengampu');
+            $table->jsonb('pengampu_slug');
             $table->string('password');
             $table->boolean('is_active')->default(false);
         });

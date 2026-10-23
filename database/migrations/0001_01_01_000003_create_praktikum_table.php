@@ -29,12 +29,22 @@ return new class extends Migration
             $table->time('jam_selesai');
             $table->boolean('is_active')->default(true);
         });
+        Schema::create('praktikum_kurikulum', function (Blueprint $table) {
+            $table->id();
+            $table->timestamps();
+            $table->foreignId('praktikum_id')->constrained('praktikum_nama')->cascadeOnDelete();
+            $table->smallInteger('materi_id');
+            $table->string('materi_nama');
+            $table->longText('deskripsi');
+            $table->boolean('is_active')->default(true);
+            $table->unique(['praktikum_id', 'materi_id']);
+        });
         Schema::create('praktikum_pertemuan', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
             $table->foreignId('praktikum_id')->constrained('praktikum_nama')->cascadeOnDelete();
+            $table->foreignId('materi_id')->constrained('praktikum_kurikulum')->restrictOnDelete();
             $table->smallInteger('nomor');
-            $table->string('topik')->nullable();
             $table->date('tanggal')->nullable();
             $table->smallInteger('bobot');
             $table->jsonb('parameter');
@@ -56,6 +66,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('praktikum_nilai');
         Schema::dropIfExists('praktikum_pertemuan');
+        Schema::dropIfExists('praktikum_kurikulum');
         Schema::dropIfExists('praktikum_jadwal');
         Schema::dropIfExists('praktikum_nama');
     }

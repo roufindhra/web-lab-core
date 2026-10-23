@@ -40,5 +40,10 @@ class Praktikum extends Authenticatable
     {
         return $this->hasMany(PraktikumPertemuan::class);
     }
+
+    public function kurikulums(): HasMany
+    {
+        return $this->hasMany(PraktikumKurikulum::class);
+    }
 }
 

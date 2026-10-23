@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'praktikum_id',
+    'materi_id',
     'nomor',
-    'topik',
     'tanggal',
     'bobot',
     'parameter',
@@ -32,6 +32,11 @@ class PraktikumPertemuan extends Model
     public function praktikum(): BelongsTo
     {
         return $this->belongsTo(Praktikum::class);
+    }
+
+    public function materi(): BelongsTo
+    {
+        return $this->belongsTo(PraktikumKurikulum::class, 'materi_id');
     }
 
     public function nilai(): HasMany
