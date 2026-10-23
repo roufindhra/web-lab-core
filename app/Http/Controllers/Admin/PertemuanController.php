@@ -174,7 +174,10 @@ class PertemuanController extends Controller
                     ->where('praktikum_id', $praktikum->id)
                     ->ignore($pertemuan),
             ],
-            'topik' => ['nullable', 'string', 'max:255'],
+            'materi_id' => [
+                'required', 'integer',
+                Rule::exists('praktikum_kurikulum', 'id')->where('praktikum_id', $praktikum->id),
+            ],
             'tanggal' => ['nullable', 'date'],
             'bobot' => ['required', 'integer', 'min:1', 'max:100'],
             'parameter' => ['required', 'array', 'min:1'],
@@ -191,7 +194,7 @@ class PertemuanController extends Controller
 
         return [
             'nomor' => $data['nomor'],
-            'topik' => $data['topik'] ?? null,
+            'materi_id' => $data['materi_id'],
             'tanggal' => $data['tanggal'] ?? null,
             'bobot' => $data['bobot'],
             'parameter' => $data['parameter'],
