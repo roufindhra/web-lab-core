@@ -17,7 +17,10 @@ class PertemuanController extends Controller
 {
     public function index(Praktikum $praktikum): JsonResponse
     {
-        $data = $praktikum->pertemuan()->orderBy('nomor')->get();
+        $data = $praktikum->pertemuan()
+            ->with('materi:id,praktikum_id,materi_id,materi_nama,is_active')
+            ->orderBy('nomor')
+            ->get();
 
         return response()->json(['data' => $data]);
     }
