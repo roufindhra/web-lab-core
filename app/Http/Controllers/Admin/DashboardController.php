@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\KeperluanPeminjaman;
 use App\Http\Controllers\Controller;
 use App\Models\Alat;
 use App\Models\Peminjaman;
@@ -19,6 +18,7 @@ class DashboardController extends Controller
     {
         $now = Carbon::now('Asia/Jakarta');
 
+        // 1. Pengajuan menunggu persetujuan
         $pendingTotal = Peminjaman::query()->where('status', 'pending')->count();
         $pendingItems = Peminjaman::query()
             ->with('items.alat:id,inventaris,nama_alat')
@@ -27,25 +27,19 @@ class DashboardController extends Controller
             ->limit(5)
             ->get(['id', 'nim', 'nama', 'keperluan', 'praktikum_slug', 'created_at']);
 
-        $kategoriKeluar = [];
-        foreach (KeperluanPeminjaman::cases() as $case) {
-            $kategoriKeluar[$case->value] = [
-                'keperluan' => $case->value,
-                'label' => $case->label(),
-                'jumlah' => 0,
-            ];
-        }
-
-        $peminjamanAktif = Peminjaman::query()
-            ->with('items:id,peminjaman_id,jumlah')
+        // 2. Alat sedang keluar
+        $alatKeluarQuery = Peminjaman::query()
             ->where('status', 'disetujui')
-            ->whereNull('returned_at')
-            ->get(['id', 'keperluan']);
+            ->whereNull('returned_at');
 
-        foreach ($peminjamanAktif as $peminjaman) {
-            $kategoriKeluar[$peminjaman->keperluan->value]['jumlah'] += (int) $peminjaman->items->sum('jumlah');
-        }
+        $alatKeluarTotal = $alatKeluarQuery->count();
 
+        $alatKeluarItems = $alatKeluarQuery
+            ->with('items.alat:id,nama_alat')
+            ->latest()
+            ->get(['id', 'nama']);
+
+        // 3. Jadwal praktikum 8 hari ke depan
         $tanggalList = collect(range(0, self::JADWAL_HARI - 1))->map(fn (int $i) => [
             'tanggal' => $now->copy()->addDays($i)->toDateString(),
             'hari' => self::HARI[$now->copy()->addDays($i)->dayOfWeekIso - 1],
@@ -78,7 +72,15 @@ class DashboardController extends Controller
                     ])->all(),
                 ],
                 'alat_keluar' => [
-                    'kategori' => array_values($kategoriKeluar),
+                    'total' => $alatKeluarTotal,
+                    'items' => $alatKeluarItems->map(fn (Peminjaman $peminjaman) => [
+                        'id' => $peminjaman->id,
+                        'nama' => $peminjaman->nama,
+                        'alat' => $peminjaman->items->map(fn ($item) => [
+                            'nama_alat' => $item->alat->nama_alat,
+                            'jumlah' => $item->jumlah,
+                        ])->all(),
+                    ])->all(),
                     'maintain' => Alat::query()
                         ->where('ketersediaan', 'perbaikan')
                         ->count(),
