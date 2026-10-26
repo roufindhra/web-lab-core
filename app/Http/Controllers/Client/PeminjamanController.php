@@ -49,8 +49,12 @@ class PeminjamanController extends Controller
                 'label' => $p->praktikum_label,
             ]);
 
+        $keperluan = collect(KeperluanPeminjaman::options())
+            ->reject(fn (array $option) => $option['value'] === KeperluanPeminjaman::PenyewaanKomersil->value)
+            ->values();
+
         return response()->json([
-            'keperluan' => KeperluanPeminjaman::options(),
+            'keperluan' => $keperluan,
             'praktikum' => $praktikum,
         ]);
     }
@@ -85,13 +89,12 @@ class PeminjamanController extends Controller
 
         $this->validasiStok($validated['items']);
 
-        $peminjaman = $this->peminjaman->ajukan(
-            nim: $user->nim,
-            nama: $user->nama,
-            keperluan: $keperluan,
-            praktikumSlug: $praktikumSlug,
-            items: $validated['items'],
-        );
+        $peminjaman = $this->peminjaman->ajukan([
+            'nim' => $user->nim,
+            'nama' => $user->nama,
+            'keperluan' => $keperluan,
+            'praktikum_slug' => $praktikumSlug,
+        ], $validated['items']);
 
         return response()->json(new PeminjamanResource($peminjaman->load('items.alat')), 201);
     }

@@ -37,9 +37,11 @@ class DosenSeeder extends Seeder
 
     public function run(): void
     {
-        Dosen::create([
-            'nama' => 'M Rouf Indhra Dewa Sambodo',
+        // updateOrCreate: nip ini juga ada di database/data/user_dosen.json (DataSeeder)
+        Dosen::updateOrCreate([
             'nip' => '117190045',
+        ], [
+            'nama' => 'M Rouf Indhra Dewa Sambodo',
             'surel' => 'muhammad.rouf94@gmail.com',
             'kepakaran' => [],
             'pengampu' => ['Survei Terestris 2'],
@@ -48,9 +50,10 @@ class DosenSeeder extends Seeder
         ]);
 
         foreach ($this->dosen as [$nama, $nip, $kepakaran]) {
-            Dosen::create([
-                'nama' => $nama,
+            Dosen::updateOrCreate([
                 'nip' => $nip,
+            ], [
+                'nama' => $nama,
                 'surel' => Str::slug($nama).'@todo.local',
                 'kepakaran' => $kepakaran,
                 'pengampu' => [],

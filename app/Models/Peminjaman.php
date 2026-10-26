@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'nama',
     'keperluan',
     'praktikum_slug',
+    'no_hp',
+    'institusi',
+    'email',
+    'tanggal_pinjam',
+    'tanggal_kembali',
     'status',
     'catatan',
     'approved_by',
@@ -34,6 +39,8 @@ class Peminjaman extends Model
         return [
             'nim' => 'integer',
             'keperluan' => KeperluanPeminjaman::class,
+            'tanggal_pinjam' => 'date',
+            'tanggal_kembali' => 'date',
             'approved_at' => 'datetime',
             'returned_at' => 'datetime',
         ];
