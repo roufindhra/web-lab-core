@@ -19,20 +19,19 @@ class PeminjamanService
     ) {}
 
     /**
+     * @param  array{nim: ?int, nama: string, keperluan: KeperluanPeminjaman, praktikum_slug: ?string, no_hp?: ?string, institusi?: ?string, email?: ?string, tanggal_pinjam?: ?string, tanggal_kembali?: ?string}  $data
      * @param  array<int, array{alat_id: int, jumlah: int}>  $items
      */
-    public function ajukan(int $nim, string $nama, KeperluanPeminjaman $keperluan, ?string $praktikumSlug, array $items): Peminjaman
+    public function ajukan(array $data, array $items): Peminjaman
     {
-        return DB::transaction(function () use ($nim, $nama, $keperluan, $praktikumSlug, $items): Peminjaman {
+        return DB::transaction(function () use ($data, $items): Peminjaman {
+            $keperluan = $data['keperluan'];
+            $praktikumSlug = $data['praktikum_slug'] ?? null;
+            $nim = $data['nim'] ?? null;
+
             $alatList = Alat::query()->findOrFail(collect($items)->pluck('alat_id'));
 
-            $peminjaman = Peminjaman::create([
-                'nim' => $nim,
-                'nama' => $nama,
-                'keperluan' => $keperluan,
-                'praktikum_slug' => $praktikumSlug,
-                'status' => 'pending',
-            ]);
+            $peminjaman = Peminjaman::create($data + ['status' => 'pending']);
 
             foreach ($items as $item) {
                 $alat = $alatList->firstOrFail(fn (Alat $alat) => $alat->id === (int) $item['alat_id']);
@@ -48,7 +47,7 @@ class PeminjamanService
                     attributes: [
                         'keperluan' => $keperluan->keterangan(),
                         'nim_pic' => $nim,
-                        'nama_pic' => $nama,
+                        'nama_pic' => $data['nama'],
                         'inventaris' => $alat->inventaris,
                         'kondisi' => $alat->kondisi,
                         'status' => StatusAlatLog::Pengajuan,
@@ -114,6 +113,47 @@ class PeminjamanService
                 'approved_by' => $approvedBy,
                 'approved_at' => now(),
             ]);
+
+            return $peminjaman;
+        });
+    }
+
+    /**
+     * Ganti daftar alat yang diminta saat pengajuan masih pending (revisi laboran).
+     *
+     * @param  array<int, array{alat_id: int, jumlah: int}>  $items
+     */
+    public function revisi(Peminjaman $peminjaman, array $items): Peminjaman
+    {
+        return DB::transaction(function () use ($peminjaman, $items): Peminjaman {
+            $alatList = Alat::query()->findOrFail(collect($items)->pluck('alat_id'));
+
+            $kodeEvent = $this->kodeEvent($peminjaman->keperluan, $peminjaman->praktikum_slug);
+
+            $peminjaman->items()->delete();
+
+            foreach ($items as $item) {
+                $alat = $alatList->firstOrFail(fn (Alat $alat) => $alat->id === (int) $item['alat_id']);
+
+                $peminjaman->items()->create([
+                    'alat_id' => $alat->id,
+                    'inventaris' => $alat->inventaris,
+                    'jumlah' => $item['jumlah'],
+                ]);
+
+                $this->alatLog->catat(
+                    kode: $kodeEvent,
+                    attributes: [
+                        'keperluan' => $peminjaman->keperluan->keterangan(),
+                        'nim_pic' => $peminjaman->nim,
+                        'nama_pic' => $peminjaman->nama,
+                        'inventaris' => $alat->inventaris,
+                        'kondisi' => $alat->kondisi,
+                        'status' => StatusAlatLog::Edit,
+                    ],
+                    peminjam: TipePic::Mhs,
+                );
+            }
 
             return $peminjaman;
         });
@@ -188,7 +228,7 @@ class PeminjamanService
     /**
      * Total unit alat yang sedang dipinjam lewat peminjaman lain yang masih aktif.
      */
-    private function unitKeluar(int $alatId, int $kecualiPeminjamanId): int
+    public function unitKeluar(int $alatId, int $kecualiPeminjamanId = 0): int
     {
         return (int) PeminjamanAlat::query()
             ->where('alat_id', $alatId)

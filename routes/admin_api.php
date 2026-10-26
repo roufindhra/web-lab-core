@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AlatController;
 use App\Http\Controllers\Admin\AlatLogController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\HargaSewaController;
 use App\Http\Controllers\Admin\KurikulumController;
 use App\Http\Controllers\Admin\MahasiswaController;
 use App\Http\Controllers\Admin\PeminjamanController;
@@ -45,7 +46,10 @@ Route::middleware(['auth:sanctum', 'role:dosen,asisten'])->group(function (): vo
     Route::delete('/alat/{alat}',    [AlatController::class, 'destroy']);
     Route::get('/alat-log',          [AlatLogController::class, 'index']);
     Route::get('/peminjaman',                 [PeminjamanController::class, 'index']);
+    Route::get('/peminjaman/alat-options',    [PeminjamanController::class, 'alatOptions']);
+    Route::put('/peminjaman/{peminjaman}/items',       [PeminjamanController::class, 'revisiItems']);
     Route::post('/peminjaman/{peminjaman}/setujui',    [PeminjamanController::class, 'setujui']);
     Route::post('/peminjaman/{peminjaman}/tolak',      [PeminjamanController::class, 'tolak']);
     Route::post('/peminjaman/{peminjaman}/kembalikan', [PeminjamanController::class, 'kembalikan']);
+    Route::apiResource('harga-sewa', HargaSewaController::class);
 });

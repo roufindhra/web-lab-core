@@ -10,8 +10,9 @@ class DataSeeder extends Seeder
     // urutan mengikuti dependensi foreign key
     private array $tables = [
         'user_dosen',
-        'user_mahasiswa', 
+        'user_mahasiswa',
         'alat',
+        'harga_sewa',
         'peminjaman',
         'alat_log',
         'peminjaman_alat',

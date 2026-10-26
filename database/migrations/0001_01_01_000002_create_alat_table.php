@@ -46,10 +46,15 @@ return new class extends Migration
         Schema::create('peminjaman', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
-            $table->integer('nim')->index();
+            $table->integer('nim')->nullable()->index()->comment('null untuk pengajuan sewa tanpa akun');
             $table->string('nama');
             $table->string('keperluan')->comment('praktikum|belajar_mandiri|penelitian|penyewaan_komersil');
             $table->string('praktikum_slug')->nullable()->comment('wajib terisi ketika keperluan = praktikum');
+            $table->string('no_hp')->nullable()->comment('identitas penyewa (sewa komersil)');
+            $table->string('institusi')->nullable()->comment('identitas penyewa (sewa komersil)');
+            $table->string('email')->nullable()->comment('identitas penyewa (sewa komersil)');
+            $table->date('tanggal_pinjam')->nullable()->comment('rencana sewa (sewa komersil)');
+            $table->date('tanggal_kembali')->nullable()->comment('rencana sewa (sewa komersil)');
             $table->string('status')->default('pending')->comment('pending|disetujui|ditolak');
             $table->string('catatan')->nullable();
             $table->string('approved_by')->nullable();
@@ -67,6 +72,14 @@ return new class extends Migration
 
             $table->unique(['peminjaman_id', 'alat_id']);
         });
+
+        Schema::create('harga_sewa', function (Blueprint $table) {
+            $table->id();
+            $table->timestamps();
+            $table->softDeletes();
+            $table->string('nama_alat')->unique();
+            $table->decimal('tarif_per_hari', 10, 2);
+        });
     }
 
     /**
@@ -74,6 +87,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('harga_sewa');
         Schema::dropIfExists('peminjaman_alat');
         Schema::dropIfExists('peminjaman');
         Schema::dropIfExists('alat_log');

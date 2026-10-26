@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\KeperluanPeminjaman;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PeminjamanResource;
+use App\Mail\PeminjamanDitolak;
+use App\Mail\SewaDisetujui;
 use App\Models\Alat;
 use App\Models\Peminjaman;
 use App\Services\CrudService;
 use App\Services\PeminjamanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class PeminjamanController extends Controller
@@ -48,6 +52,48 @@ class PeminjamanController extends Controller
         return $this->crud->paginated($peminjaman, PeminjamanResource::class);
     }
 
+    public function alatOptions(): JsonResponse
+    {
+        $alat = Alat::query()
+            ->orderBy('nama_alat')
+            ->orderBy('inventaris')
+            ->get(['id', 'nama_alat', 'inventaris', 'jumlah']);
+
+        return response()->json(['data' => $alat]);
+    }
+
+    public function revisiItems(Request $request, Peminjaman $peminjaman): JsonResponse
+    {
+        if ($peminjaman->status !== 'pending') {
+            return response()->json(['message' => 'Hanya pengajuan yang masih menunggu yang dapat direvisi.'], 422);
+        }
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.alat_id' => ['required', 'integer', 'exists:alat,id'],
+            'items.*.jumlah' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $alatList = Alat::query()->findMany(collect($validated['items'])->pluck('alat_id'))->keyBy('id');
+
+        $errors = [];
+        foreach ($validated['items'] as $i => $item) {
+            $alat = $alatList[$item['alat_id']];
+
+            if ($item['jumlah'] > $alat->jumlah) {
+                $errors["items.{$i}.jumlah"] = "Jumlah {$alat->nama_alat} melebihi stok (maks {$alat->jumlah}).";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $this->peminjaman->revisi($peminjaman, $validated['items']);
+
+        return response()->json(new PeminjamanResource($peminjaman->fresh(['items.alat'])));
+    }
+
     public function setujui(Request $request, Peminjaman $peminjaman): JsonResponse
     {
         if ($peminjaman->status !== 'pending') {
@@ -65,6 +111,14 @@ class PeminjamanController extends Controller
 
         $this->peminjaman->setujui($peminjaman, approvedBy: $user->nama);
 
+        if ($peminjaman->keperluan === KeperluanPeminjaman::PenyewaanKomersil && $peminjaman->email !== null) {
+            try {
+                Mail::to($peminjaman->email)->send(new SewaDisetujui($peminjaman->fresh(['items.alat'])));
+            } catch (\Throwable $e) {
+                Log::warning("Gagal mengirim email persetujuan sewa #{$peminjaman->id}: {$e->getMessage()}");
+            }
+        }
+
         return response()->json(new PeminjamanResource($peminjaman->fresh(['items.alat'])));
     }
 
@@ -79,6 +133,14 @@ class PeminjamanController extends Controller
         ]);
 
         $this->peminjaman->tolak($peminjaman, $validated['catatan']);
+
+        if ($peminjaman->email !== null) {
+            try {
+                Mail::to($peminjaman->email)->send(new PeminjamanDitolak($peminjaman->fresh(['items.alat'])));
+            } catch (\Throwable $e) {
+                Log::warning("Gagal mengirim email penolakan #{$peminjaman->id}: {$e->getMessage()}");
+            }
+        }
 
         return response()->json(new PeminjamanResource($peminjaman->fresh(['items.alat'])));
     }

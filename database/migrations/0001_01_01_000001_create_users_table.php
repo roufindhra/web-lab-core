@@ -33,7 +33,7 @@ return new class extends Migration
             $table->timestamps();
             $table->string('nama');
             $table->string('nip')->unique();
-            $table->string('surel')->unique();
+            $table->string('surel')->unique() ->nullable();
             $table->jsonb('kepakaran');
             $table->jsonb('pengampu');
             $table->jsonb('pengampu_slug');
