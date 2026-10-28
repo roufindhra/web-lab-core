@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AlatController;
 use App\Http\Controllers\Admin\AlatLogController;
+use App\Http\Controllers\Admin\AlatTokenController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\HargaSewaController;
@@ -26,6 +27,7 @@ Route::middleware(['auth:sanctum', 'role:dosen,asisten'])->group(function (): vo
     Route::post('/alat',             [AlatController::class, 'store']);
     Route::put('/alat/{alat}',       [AlatController::class, 'update']);
     Route::delete('/alat/{alat}',    [AlatController::class, 'destroy']);
+    Route::post('/alat-token/claim', [AlatTokenController::class, 'claim'])->middleware('role:asisten');
     Route::get('/peminjaman',                 [PeminjamanController::class, 'index']);
     Route::get('/peminjaman/alat-options',    [PeminjamanController::class, 'alatOptions']);
     Route::put('/peminjaman/{peminjaman}/items',       [PeminjamanController::class, 'revisiItems']);
@@ -59,6 +61,9 @@ Route::middleware(['auth:sanctum', 'role:dosen,asisten'])->group(function (): vo
         Route::put('/praktikum/{praktikum}',    [PraktikumController::class, 'update']);
         Route::delete('/praktikum/{praktikum}', [PraktikumController::class, 'destroy']);
         Route::get('/alat-log',          [AlatLogController::class, 'index']);
+        Route::get('/alat-token',           [AlatTokenController::class, 'index']);
+        Route::post('/alat-token',          [AlatTokenController::class, 'store']);
+        Route::post('/alat-token/{token}/revoke', [AlatTokenController::class, 'revoke']);
         Route::apiResource('harga-sewa', HargaSewaController::class);
     });
 });

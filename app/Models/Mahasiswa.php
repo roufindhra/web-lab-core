@@ -52,4 +52,15 @@ class Mahasiswa extends Authenticatable
 
         return 'mahasiswa';
     }
+
+    public function activeAlatToken(): ?AdminAlatToken
+    {
+        return AdminAlatToken::query()
+            ->where('mahasiswa_id', $this->id)
+            ->whereNotNull('claimed_at')
+            ->whereNull('revoked_at')
+            ->where('expires_at', '>', now())
+            ->orderByDesc('claimed_at')
+            ->first();
+    }
 }

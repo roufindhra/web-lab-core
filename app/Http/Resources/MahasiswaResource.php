@@ -9,6 +9,8 @@ class MahasiswaResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $alatToken = $this->activeAlatToken();
+
         return [
             'id' => $this->id,
             'nama' => $this->nama,
@@ -22,6 +24,8 @@ class MahasiswaResource extends JsonResource
             'is_active_asisten' => $this->is_active_asisten,
             'pengampu_praktikum' => $this->pengampu_praktikum,
             'pengampu_plug' => $this->pengampu_plug,
+            'alat_permissions' => $alatToken?->permissions ?? [],
+            'alat_token_expires_at' => $alatToken?->expires_at?->toISOString(),
             'role' => $this->role,
         ];
     }
