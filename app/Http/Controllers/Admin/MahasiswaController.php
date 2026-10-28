@@ -22,7 +22,7 @@ class MahasiswaController extends Controller
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'angkatan' => ['nullable', 'integer'],
-            'role' => ['nullable', 'in:asisten,mahasiswa'],
+            'role' => ['nullable', 'in:asisten,asisten_all,mahasiswa'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'sort_direction' => ['nullable', 'in:asc,desc'],
@@ -39,6 +39,8 @@ class MahasiswaController extends Controller
             ->when(($validated['role'] ?? null) === 'asisten', fn ($query) => $query
                 ->where('is_asisten', true)
                 ->where('is_active_asisten', true))
+            ->when(($validated['role'] ?? null) === 'asisten_all', fn ($query) => $query
+                ->where('is_asisten', true))
             ->when(($validated['role'] ?? null) === 'mahasiswa', fn ($query) => $query
                 ->where(function ($query) {
                     $query->where('is_asisten', false)->orWhere('is_active_asisten', false);
@@ -84,6 +86,53 @@ class MahasiswaController extends Controller
         $mahasiswa->update([
             'praktikum' => $slugs,
             'praktikum_plug' => $plugs,
+        ]);
+
+        return response()->json(new MahasiswaResource($mahasiswa->fresh()));
+    }
+
+    public function updateAsisten(Request $request, Mahasiswa $mahasiswa): JsonResponse
+    {
+        $data = $request->validate([
+            'is_asisten' => ['required', 'boolean'],
+            'is_active_asisten' => ['required', 'boolean'],
+            'pengampu_praktikum' => ['present', 'array'],
+            'pengampu_praktikum.*' => ['string', 'alpha_dash', Rule::exists('praktikum_nama', 'praktikum_slug')],
+            'pengampu_plug' => ['present', 'array'],
+            'pengampu_plug.*' => ['present', 'array'],
+            'pengampu_plug.*.*' => ['string', 'max:50'],
+        ]);
+
+        $slugs = array_values($data['pengampu_praktikum']);
+        $plugs = $data['pengampu_plug'];
+
+        if (array_diff($slugs, array_keys($plugs)) !== [] || array_diff(array_keys($plugs), $slugs) !== []) {
+            return response()->json([
+                'message' => 'pengampu_plug harus memiliki key yang sama dengan pengampu_praktikum.',
+            ], 422);
+        }
+
+        foreach ($plugs as $slug => $plugList) {
+            foreach ($plugList as $plug) {
+                $jadwalTersedia = DB::table('praktikum_jadwal')
+                    ->join('praktikum_nama', 'praktikum_jadwal.praktikum_id', '=', 'praktikum_nama.id')
+                    ->where('praktikum_nama.praktikum_slug', $slug)
+                    ->where('praktikum_jadwal.plug', $plug)
+                    ->exists();
+
+                if (! $jadwalTersedia) {
+                    return response()->json([
+                        'message' => "Jadwal untuk plug {$plug} pada praktikum {$slug} belum tersedia.",
+                    ], 422);
+                }
+            }
+        }
+
+        $mahasiswa->update([
+            'is_asisten' => $data['is_asisten'],
+            'is_active_asisten' => $data['is_active_asisten'],
+            'pengampu_praktikum' => $slugs,
+            'pengampu_plug' => $plugs,
         ]);
 
         return response()->json(new MahasiswaResource($mahasiswa->fresh()));

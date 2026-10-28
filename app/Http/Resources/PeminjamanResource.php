@@ -16,6 +16,7 @@ class PeminjamanResource extends JsonResource
             'keperluan' => $this->keperluan,
             'keperluan_label' => $this->keperluan->label(),
             'praktikum_slug' => $this->praktikum_slug,
+            'can_process' => $this->can_process ?? true,
             'no_hp' => $this->no_hp,
             'institusi' => $this->institusi,
             'email' => $this->email,
