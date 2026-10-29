@@ -41,7 +41,7 @@ class DataSeeder extends Seeder
             }
 
             // samakan key antar baris (insert batch butuh kolom yang sama)
-            $columns = array_unique(array_merge(...array_map('array_keys', $rows)));
+            $columns = array_unique(array_merge(...array_values(array_map('array_keys', $rows))));
             $rows = array_map(function (array $row) use ($columns) {
                 foreach ($columns as $col) {
                     $row[$col] = $row[$col] ?? null;
