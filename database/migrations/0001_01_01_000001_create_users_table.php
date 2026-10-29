@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->timestamps();
             $table->string('nama');
-            $table->integer('nim')->unique();
+            $table->bigInteger('nim')->unique();
             $table->string('surel')->unique();
             $table->integer('angkatan');
             $table->jsonb('praktikum')->nullable();
