@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AlatResource;
 use App\Models\Alat;
 use App\Services\AlatLogService;
+use App\Services\AlatPermissionService;
 use App\Services\CrudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,9 +17,13 @@ use Illuminate\Validation\Rule;
 
 class AlatController extends Controller
 {
+    /** field alat yang menyentuh identitas/kuota unit → butuh crud_inventaris */
+    private const FIELD_BUCKET_CRUD = ['inventaris', 'nama_alat', 'merk', 'tipe', 'serial_number', 'lokasi_penyimpanan', 'jumlah'];
+
     public function __construct(
         private readonly CrudService $crud,
         private readonly AlatLogService $alatLog,
+        private readonly AlatPermissionService $permissions,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -52,6 +57,10 @@ class AlatController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (! $this->permissions->can($request, 'crud_inventaris')) {
+            return $this->forbidden('crud_inventaris');
+        }
+
         $data = $this->validateAlat($request);
 
         if (($error = $this->resolveKondisi($data)) !== null) {
@@ -88,6 +97,10 @@ class AlatController extends Controller
             return response()->json(['message' => $error], 422);
         }
 
+        if (! $this->izinkanPerubahan($request, $alat, $data)) {
+            return $this->forbidden($this->permissionYangDibutuhkan($alat, $data));
+        }
+
         $kondisiBerubah = $data['kondisi'] !== $alat->kondisi;
 
         $alat = DB::transaction(function () use ($request, $alat, $data, $kondisiBerubah): Alat {
@@ -116,6 +129,10 @@ class AlatController extends Controller
 
     public function destroy(Request $request, Alat $alat): JsonResponse
     {
+        if (! $this->permissions->can($request, 'crud_inventaris')) {
+            return $this->forbidden('crud_inventaris');
+        }
+
         DB::transaction(function () use ($request, $alat): void {
             $this->alatLog->catat(
                 kode: 'inv',
@@ -167,5 +184,57 @@ class AlatController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * @return string[] permission yang dibutuhkan untuk perubahan ini
+     */
+    private function permissionYangDibutuhkan(Alat $alat, array $data): array
+    {
+        $dibutuhkan = [];
+
+        if (($data['ketersediaan'] ?? null) !== $alat->ketersediaan) {
+            $dibutuhkan[] = 'edit_status';
+        }
+
+        if ($data['kondisi'] !== $alat->kondisi) {
+            $dibutuhkan[] = 'edit_kondisi';
+        }
+
+        foreach (self::FIELD_BUCKET_CRUD as $field) {
+            if ($data[$field] !== $alat->{$field}) {
+                $dibutuhkan[] = 'crud_inventaris';
+                break;
+            }
+        }
+
+        return array_values(array_unique($dibutuhkan));
+    }
+
+    private function izinkanPerubahan(Request $request, Alat $alat, array $data): bool
+    {
+        foreach ($this->permissionYangDibutuhkan($alat, $data) as $permission) {
+            if (! $this->permissions->can($request, $permission)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function forbidden(array|string $permissions): JsonResponse
+    {
+        $labels = [
+            'edit_status' => 'edit status ketersediaan',
+            'edit_kondisi' => 'edit catatan kondisi',
+            'crud_inventaris' => 'tambah/hapus inventaris',
+        ];
+
+        $list = is_string($permissions) ? [$permissions] : $permissions;
+        $label = implode(' & ', array_map(fn ($p) => $labels[$p] ?? $p, $list));
+
+        return response()->json([
+            'message' => "Token izin Anda tidak mencakup: {$label}.",
+        ], 403);
     }
 }

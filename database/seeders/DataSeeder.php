@@ -40,6 +40,11 @@ class DataSeeder extends Seeder
                 continue;
             }
 
+            // dukung format {"nama_tabel": [...]} dari export pgAdmin/pg_dump
+            if (! array_is_list($rows)) {
+                $rows = reset($rows);
+            }
+
             // samakan key antar baris (insert batch butuh kolom yang sama)
             $columns = array_unique(array_merge(...array_values(array_map('array_keys', $rows))));
             $rows = array_map(function (array $row) use ($columns) {

@@ -80,6 +80,18 @@ return new class extends Migration
             $table->string('nama_alat')->unique();
             $table->decimal('tarif_per_hari', 10, 2);
         });
+
+        Schema::create('admin_alat_tokens', function (Blueprint $table) {
+            $table->id();
+            $table->timestamps();
+            $table->foreignId('mahasiswa_id')->constrained('user_mahasiswa')->cascadeOnDelete();
+            $table->foreignId('dosen_id')->constrained('user_dosen')->cascadeOnDelete();
+            $table->string('token', 16)->unique()->comment('kode plaintext, format SGG-XXXXXXXX');
+            $table->jsonb('permissions')->comment('subset: edit_status|edit_kondisi|crud_inventaris');
+            $table->timestamp('expires_at');
+            $table->timestamp('claimed_at')->nullable();
+            $table->timestamp('revoked_at')->nullable();
+        });
     }
 
     /**
@@ -87,6 +99,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('admin_alat_tokens');
         Schema::dropIfExists('harga_sewa');
         Schema::dropIfExists('peminjaman_alat');
         Schema::dropIfExists('peminjaman');

@@ -37,6 +37,8 @@ class PraktikumController extends Controller
                         ->orWhere('praktikum_slug', 'like', "%{$search}%");
                 });
             })
+            ->when($request->user()->role === 'asisten', fn ($query) => $query
+                ->whereIn('praktikum_slug', $request->user()->pengampu_praktikum ?? []))
             ->orderBy('praktikum_label')
             ->paginate(perPage: $validated['per_page'] ?? 50, page: $validated['page'] ?? null);
 
@@ -276,6 +278,18 @@ class PraktikumController extends Controller
             return response()->json([
                 'message' => "Mahasiswa tidak terdaftar pada praktikum {$slug}.",
             ], 422);
+        }
+
+        $user = $request->user();
+
+        if ($user->role === 'asisten') {
+            $plugMahasiswa = ($mahasiswa->praktikum_plug ?? [])[$slug] ?? null;
+
+            if ($plugMahasiswa === null || ! in_array($plugMahasiswa, $user->pengampu_plug[$slug] ?? [], true)) {
+                return response()->json([
+                    'message' => 'Anda hanya dapat mengatur kelompok pada plug yang Anda ampu.',
+                ], 403);
+            }
         }
 
         $data = $request->validate([

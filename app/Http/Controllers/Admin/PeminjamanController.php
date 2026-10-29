@@ -8,6 +8,7 @@ use App\Http\Resources\PeminjamanResource;
 use App\Mail\PeminjamanDitolak;
 use App\Mail\SewaDisetujui;
 use App\Models\Alat;
+use App\Models\Mahasiswa;
 use App\Models\Peminjaman;
 use App\Services\CrudService;
 use App\Services\PeminjamanService;
@@ -23,6 +24,60 @@ class PeminjamanController extends Controller
         private readonly PeminjamanService $peminjaman,
         private readonly CrudService $crud,
     ) {}
+
+    private function ensureAmpu(Request $request, Peminjaman $peminjaman): ?JsonResponse
+    {
+        if (! $this->bolehProses($request->user(), $peminjaman)) {
+            return response()->json(['message' => 'Anda hanya dapat memproses peminjaman dari plug yang Anda ampu.'], 403);
+        }
+
+        return null;
+    }
+
+    private function bolehProses($user, Peminjaman $peminjaman, ?array $pengajuPlugs = null): bool
+    {
+        if ($user->role !== 'asisten') {
+            return true;
+        }
+
+        $plug = $this->resolvePengajuPlug($peminjaman, $pengajuPlugs);
+
+        return $plug !== null
+            && in_array($plug, $user->pengampu_plug[$peminjaman->praktikum_slug] ?? [], true);
+    }
+
+    private function resolvePengajuPlug(Peminjaman $peminjaman, ?array $pengajuPlugs = null): ?string
+    {
+        if ($peminjaman->keperluan !== KeperluanPeminjaman::Praktikum
+            || $peminjaman->nim === null
+            || $peminjaman->praktikum_slug === null
+        ) {
+            return null;
+        }
+
+        $plugs = $pengajuPlugs ?? Mahasiswa::query()
+            ->where('nim', $peminjaman->nim)
+            ->value('praktikum_plug');
+
+        return $plugs[$peminjaman->praktikum_slug] ?? null;
+    }
+
+    private function tandaiCanProcess($user, $records): void
+    {
+        if ($user->role !== 'asisten') {
+            $records->each(fn (Peminjaman $record) => $record->can_process = true);
+
+            return;
+        }
+
+        $plugsByNim = Mahasiswa::query()
+            ->whereIn('nim', $records->pluck('nim')->filter()->unique())
+            ->pluck('praktikum_plug', 'nim');
+
+        foreach ($records as $record) {
+            $record->can_process = $this->bolehProses($user, $record, $plugsByNim[$record->nim] ?? null);
+        }
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -49,6 +104,8 @@ class PeminjamanController extends Controller
             ->latest()
             ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
+        $this->tandaiCanProcess($request->user(), $peminjaman->getCollection());
+
         return $this->crud->paginated($peminjaman, PeminjamanResource::class);
     }
 
@@ -66,6 +123,10 @@ class PeminjamanController extends Controller
     {
         if ($peminjaman->status !== 'pending') {
             return response()->json(['message' => 'Hanya pengajuan yang masih menunggu yang dapat direvisi.'], 422);
+        }
+
+        if ($forbidden = $this->ensureAmpu($request, $peminjaman)) {
+            return $forbidden;
         }
 
         $validated = $request->validate([
@@ -102,11 +163,8 @@ class PeminjamanController extends Controller
 
         $user = $request->user();
 
-        if ($user->role === 'asisten'
-            && ($peminjaman->keperluan !== KeperluanPeminjaman::Praktikum
-                || ! in_array($peminjaman->praktikum_slug, $user->pengampu_praktikum ?? [], true))
-        ) {
-            return response()->json(['message' => 'Anda hanya dapat menyetujui peminjaman untuk praktikum yang Anda ampu.'], 403);
+        if ($forbidden = $this->ensureAmpu($request, $peminjaman)) {
+            return $forbidden;
         }
 
         $this->peminjaman->setujui($peminjaman, approvedBy: $user->nama);
@@ -126,6 +184,10 @@ class PeminjamanController extends Controller
     {
         if ($peminjaman->status !== 'pending') {
             return response()->json(['message' => 'Pengajuan sudah diproses.'], 422);
+        }
+
+        if ($forbidden = $this->ensureAmpu($request, $peminjaman)) {
+            return $forbidden;
         }
 
         $validated = $request->validate([
@@ -149,6 +211,10 @@ class PeminjamanController extends Controller
     {
         if ($peminjaman->status !== 'disetujui' || $peminjaman->returned_at !== null) {
             return response()->json(['message' => 'Peminjaman ini tidak sedang berjalan.'], 422);
+        }
+
+        if ($forbidden = $this->ensureAmpu($request, $peminjaman)) {
+            return $forbidden;
         }
 
         $validated = $request->validate([
