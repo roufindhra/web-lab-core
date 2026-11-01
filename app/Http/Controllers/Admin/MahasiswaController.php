@@ -22,7 +22,7 @@ class MahasiswaController extends Controller
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'angkatan' => ['nullable', 'integer'],
-            'role' => ['nullable', 'in:asisten,asisten_all,mahasiswa'],
+            'role' => ['nullable', 'in:asisten,asisten_all,mahasiswa,asisten_nonaktif'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'sort_direction' => ['nullable', 'in:asc,desc'],
@@ -39,6 +39,9 @@ class MahasiswaController extends Controller
             ->when(($validated['role'] ?? null) === 'asisten', fn ($query) => $query
                 ->where('is_asisten', true)
                 ->where('is_active_asisten', true))
+            ->when(($validated['role'] ?? null) === 'asisten_nonaktif', fn ($query) => $query
+                ->where('is_asisten', true)
+                ->where('is_active_asisten', false))
             ->when(($validated['role'] ?? null) === 'asisten_all', fn ($query) => $query
                 ->where('is_asisten', true))
             ->when(($validated['role'] ?? null) === 'mahasiswa', fn ($query) => $query
