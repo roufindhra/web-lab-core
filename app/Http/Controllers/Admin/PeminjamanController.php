@@ -84,6 +84,8 @@ class PeminjamanController extends Controller
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:'.implode(',', Peminjaman::STATUS)],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -101,6 +103,10 @@ class PeminjamanController extends Controller
             })
             ->when($validated['status'] ?? null, fn ($query, string $status) => $query
                 ->where('status', $status))
+            ->when($validated['date_from'] ?? null, fn ($query, string $date) => $query
+                ->whereDate('created_at', '>=', $date))
+            ->when($validated['date_to'] ?? null, fn ($query, string $date) => $query
+                ->whereDate('created_at', '<=', $date))
             ->latest()
             ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
