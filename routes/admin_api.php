@@ -45,6 +45,7 @@ Route::middleware(['auth:sanctum', 'role:dosen,asisten'])->group(function (): vo
         Route::put('/praktikum/{praktikum:praktikum_slug}/mahasiswa/{mahasiswa}/kelompok', [PraktikumController::class, 'updateKelompok']);
         Route::get('/praktikum/{praktikum:praktikum_slug}/kurikulum',            [KurikulumController::class, 'index']);
         Route::post('/praktikum/{praktikum:praktikum_slug}/kurikulum',           [KurikulumController::class, 'store']);
+        Route::put('/praktikum/{praktikum:praktikum_slug}/kurikulum/reorder',    [KurikulumController::class, 'reorder']);
         Route::put('/praktikum/{praktikum:praktikum_slug}/kurikulum/{kurikulum}', [KurikulumController::class, 'update'])->scopeBindings();
         Route::delete('/praktikum/{praktikum:praktikum_slug}/kurikulum/{kurikulum}', [KurikulumController::class, 'destroy'])->scopeBindings();
         Route::post('/praktikum/{praktikum:praktikum_slug}/kurikulum/{kurikulum}/restore', [KurikulumController::class, 'restore'])->scopeBindings();
