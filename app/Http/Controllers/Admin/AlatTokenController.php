@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AlatTokenResource;
 use App\Models\AdminAlatToken;
-use App\Models\Mahasiswa;
 use App\Services\CrudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AlatTokenController extends Controller

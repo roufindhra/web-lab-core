@@ -20,6 +20,8 @@ class AuthService
             $this->throwInvalidCredentials('NIM');
         }
 
+        $this->rehashPasswordIfNeeded($mahasiswa, $password);
+
         if (! $mahasiswa->is_active_user) {
             $this->throwInactiveAccount();
         }
@@ -49,6 +51,8 @@ class AuthService
         $mahasiswa = Mahasiswa::where('nim', $nomorInduk)->first();
 
         if ($mahasiswa && Hash::check($password, $mahasiswa->password)) {
+            $this->rehashPasswordIfNeeded($mahasiswa, $password);
+
             if (! $mahasiswa->is_active_user) {
                 $this->throwInactiveAccount();
             }
@@ -63,6 +67,18 @@ class AuthService
         }
 
         $this->throwInvalidCredentials('Nomor induk');
+    }
+
+    /**
+     * Naikkan biaya hash password yang dibuat saat import CSV ke cost default.
+     */
+    private function rehashPasswordIfNeeded(Mahasiswa $mahasiswa, string $password): void
+    {
+        if (! Hash::needsRehash($mahasiswa->password)) {
+            return;
+        }
+
+        $mahasiswa->update(['password' => Hash::make($password)]);
     }
 
     public function logout(Dosen|Mahasiswa $user): void

@@ -7,19 +7,21 @@ use App\Http\Resources\PraktikumResource;
 use App\Models\Mahasiswa;
 use App\Models\Praktikum;
 use App\Models\PraktikumNilai;
+use App\Models\PraktikumPertemuan;
 use App\Services\CrudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PraktikumController extends Controller
 {
+    private const SORTABLE = ['praktikum_label', 'semester', 'praktikum_slug', 'is_active'];
+
     private const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
-    public function __construct(private readonly CrudService $crud)
-    {
-    }
+    public function __construct(private readonly CrudService $crud) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -27,20 +29,26 @@ class PraktikumController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $praktikum = Praktikum::query()
-            ->with('jadwal')
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('praktikum_label', 'like', "%{$search}%")
-                        ->orWhere('praktikum_slug', 'like', "%{$search}%");
-                });
-            })
-            ->when($request->user()->role === 'asisten', fn ($query) => $query
-                ->whereIn('praktikum_slug', $request->user()->pengampu_praktikum ?? []))
-            ->orderBy('praktikum_label')
-            ->paginate(perPage: $validated['per_page'] ?? 50, page: $validated['page'] ?? null);
+        $praktikum = $this->applySort(
+            Praktikum::query()
+                ->with('jadwal')
+                ->when($validated['search'] ?? null, function ($query, string $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('praktikum_label', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('praktikum_slug', $this->likeOperator(), "%{$search}%");
+                    });
+                })
+                ->when($request->user()->role === 'asisten', fn ($query) => $query
+                    ->whereIn('praktikum_slug', $request->user()->pengampu_praktikum ?? [])),
+            $validated,
+            self::SORTABLE,
+            'praktikum_label',
+            'asc',
+            ['id'],
+        )->paginate(perPage: $validated['per_page'] ?? 50, page: $validated['page'] ?? null);
 
         $counts = $this->mahasiswaCounts();
 
@@ -172,8 +180,8 @@ class PraktikumController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, \App\Models\PraktikumPertemuan>  $pertemuan
-     * @param  \Illuminate\Support\Collection<int, PraktikumNilai>|null  $nilaiRows
+     * @param  Collection<int, PraktikumPertemuan>  $pertemuan
+     * @param  Collection<int, PraktikumNilai>|null  $nilaiRows
      * @return array<string, float>
      */
     private function skorPerPertemuan($pertemuan, $nilaiRows): array

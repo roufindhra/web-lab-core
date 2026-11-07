@@ -3,19 +3,23 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\MahasiswaImportResource;
 use App\Http\Resources\MahasiswaResource;
+use App\Jobs\ImportMahasiswaCsv;
 use App\Models\Mahasiswa;
+use App\Models\MahasiswaImport;
 use App\Services\CrudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class MahasiswaController extends Controller
 {
-    public function __construct(private readonly CrudService $crud)
-    {
-    }
+    private const SORTABLE = ['nim', 'nama', 'angkatan', 'surel', 'is_active_user', 'is_active_asisten'];
+
+    public function __construct(private readonly CrudService $crud) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -23,33 +27,43 @@ class MahasiswaController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'angkatan' => ['nullable', 'integer'],
             'role' => ['nullable', 'in:asisten,asisten_all,mahasiswa,asisten_nonaktif'],
+            'status' => ['nullable', 'in:active,inactive,all'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'sort_direction' => ['nullable', 'in:asc,desc'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $mahasiswa = Mahasiswa::query()
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('nama', 'like', "%{$search}%")
-                        ->orWhere('nim', 'like', "%{$search}%");
-                });
-            })
-            ->when($validated['angkatan'] ?? null, fn ($query, int $angkatan) => $query->where('angkatan', $angkatan))
-            ->when(($validated['role'] ?? null) === 'asisten', fn ($query) => $query
-                ->where('is_asisten', true)
-                ->where('is_active_asisten', true))
-            ->when(($validated['role'] ?? null) === 'asisten_nonaktif', fn ($query) => $query
-                ->where('is_asisten', true)
-                ->where('is_active_asisten', false))
-            ->when(($validated['role'] ?? null) === 'asisten_all', fn ($query) => $query
-                ->where('is_asisten', true))
-            ->when(($validated['role'] ?? null) === 'mahasiswa', fn ($query) => $query
-                ->where(function ($query) {
-                    $query->where('is_asisten', false)->orWhere('is_active_asisten', false);
-                }))
-            ->orderBy('nim', $validated['sort_direction'] ?? 'asc')
-            ->paginate(perPage: $validated['per_page'] ?? 50, page: $validated['page'] ?? null);
+        $status = $validated['status'] ?? 'active';
+
+        $mahasiswa = $this->applySort(
+            Mahasiswa::query()
+                ->when($validated['search'] ?? null, function ($query, string $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('nama', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('nim', $this->likeOperator(), "%{$search}%");
+                    });
+                })
+                ->when($status === 'active', fn ($query) => $query->where('is_active_user', true))
+                ->when($status === 'inactive', fn ($query) => $query->where('is_active_user', false))
+                ->when($validated['angkatan'] ?? null, fn ($query, int $angkatan) => $query->where('angkatan', $angkatan))
+                ->when(($validated['role'] ?? null) === 'asisten', fn ($query) => $query
+                    ->where('is_asisten', true)
+                    ->where('is_active_asisten', true))
+                ->when(($validated['role'] ?? null) === 'asisten_nonaktif', fn ($query) => $query
+                    ->where('is_asisten', true)
+                    ->where('is_active_asisten', false))
+                ->when(($validated['role'] ?? null) === 'asisten_all', fn ($query) => $query
+                    ->where('is_asisten', true))
+                ->when(($validated['role'] ?? null) === 'mahasiswa', fn ($query) => $query
+                    ->where(function ($query) {
+                        $query->where('is_asisten', false)->orWhere('is_active_asisten', false);
+                    })),
+            $validated,
+            self::SORTABLE,
+            'nim',
+            'asc',
+            ['nim'],
+        )->paginate(perPage: $validated['per_page'] ?? 50, page: $validated['page'] ?? null);
 
         return $this->crud->paginated($mahasiswa, MahasiswaResource::class);
     }
@@ -141,94 +155,96 @@ class MahasiswaController extends Controller
         return response()->json(new MahasiswaResource($mahasiswa->fresh()));
     }
 
+    public function updateStatus(Request $request, Mahasiswa $mahasiswa): JsonResponse
+    {
+        $data = $request->validate([
+            'is_active_user' => ['required', 'boolean'],
+        ]);
+
+        $mahasiswa->update(['is_active_user' => $data['is_active_user']]);
+
+        if (! $data['is_active_user']) {
+            $mahasiswa->tokens()->delete();
+        }
+
+        return response()->json(new MahasiswaResource($mahasiswa->fresh()));
+    }
+
+    public function resetPassword(Mahasiswa $mahasiswa): JsonResponse
+    {
+        $mahasiswa->update(['password' => (string) $mahasiswa->nim]);
+        $mahasiswa->tokens()->delete();
+
+        return response()->json([
+            'message' => 'Password berhasil direset ke NIM. Minta mahasiswa login lalu ganti password.',
+        ]);
+    }
+
     public function importCsv(Request $request): JsonResponse
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:2048'],
         ]);
 
-        $handle = fopen($request->file('file')->getRealPath(), 'r');
+        $file = $request->file('file');
+
+        if (($headerError = $this->csvHeaderError($file->getRealPath())) !== null) {
+            return response()->json(['message' => $headerError], 422);
+        }
+
+        $path = $file->storeAs('imports', Str::uuid()->toString().'.csv', 'local');
+
+        $import = MahasiswaImport::create([
+            'original_filename' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'status' => 'queued',
+            'total_rows' => 0,
+            'processed_rows' => 0,
+        ]);
+
+        $import->refresh();
+
+        ImportMahasiswaCsv::dispatch($import->id);
+
+        return response()->json(new MahasiswaImportResource($import), 202);
+    }
+
+    public function importStatus(MahasiswaImport $import): JsonResponse
+    {
+        return response()->json(new MahasiswaImportResource($import));
+    }
+
+    public function latestImport(): JsonResponse
+    {
+        $import = MahasiswaImport::query()->latest('id')->first();
+
+        return response()->json($import !== null ? new MahasiswaImportResource($import) : null);
+    }
+
+    private function csvHeaderError(string $path): ?string
+    {
+        $handle = fopen($path, 'r');
 
         if ($handle === false) {
-            return response()->json(['message' => 'File tidak dapat dibaca.'], 422);
+            return 'File tidak dapat dibaca.';
         }
 
         $header = fgetcsv($handle);
-
-        if ($header === false) {
-            fclose($handle);
-
-            return response()->json(['message' => 'File CSV kosong.'], 422);
-        }
-
-        $header = array_map(fn (string $column): string => strtolower(trim($column)), $header);
-
-        $requiredColumns = ['nama', 'nim'];
-        $missingColumns = array_diff($requiredColumns, $header);
-
-        if ($missingColumns !== []) {
-            fclose($handle);
-
-            return response()->json([
-                'message' => 'Kolom wajib tidak ditemukan: '.implode(', ', $missingColumns).'.',
-            ], 422);
-        }
-
-        $columns = array_flip($header);
-        $imported = 0;
-        $updated = 0;
-        $failed = [];
-        $rowNumber = 1;
-
-        while (($row = fgetcsv($handle)) !== false) {
-            $rowNumber++;
-
-            if (count($row) === 1 && trim((string) $row[0]) === '') {
-                continue;
-            }
-
-            $nama = trim((string) ($row[$columns['nama']] ?? ''));
-            $nim = trim((string) ($row[$columns['nim']] ?? ''));
-
-            if ($nama === '' || $nim === '') {
-                $failed[] = ['row' => $rowNumber, 'message' => 'nama dan nim wajib diisi.'];
-
-                continue;
-            }
-
-            if (! ctype_digit($nim) || strlen($nim) !== 9) {
-                $failed[] = ['row' => $rowNumber, 'message' => 'nim harus berupa 9 digit angka.'];
-
-                continue;
-            }
-
-            $angkatan = 2000 + (int) substr($nim, 3, 2);
-            $surel = $nim.'@student.upnyk.ac.id';
-
-            $existing = Mahasiswa::where('nim', $nim)->first();
-            $values = [
-                'nama' => mb_convert_case($nama, MB_CASE_TITLE, 'UTF-8'),
-                'nim' => $nim,
-                'surel' => $surel,
-                'angkatan' => $angkatan,
-            ];
-
-            if ($existing) {
-                $existing->update($values);
-                $updated++;
-            } else {
-                Mahasiswa::create($values + ['password' => $nim, 'is_asisten' => false, 'is_active_user' => true]);
-                $imported++;
-            }
-        }
-
         fclose($handle);
 
-        return response()->json([
-            'message' => "Import selesai: {$imported} mahasiswa baru, {$updated} diperbarui, ".count($failed).' gagal.',
-            'imported' => $imported,
-            'updated' => $updated,
-            'failed' => $failed,
-        ]);
+        if ($header === false) {
+            return 'File CSV kosong.';
+        }
+
+        $header = array_map(fn ($column): string => strtolower(trim((string) $column)), $header);
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+
+        $missingColumns = array_diff(['nama', 'nim'], $header);
+
+        if ($missingColumns !== []) {
+            return 'Kolom wajib tidak ditemukan: '.implode(', ', $missingColumns).'.';
+        }
+
+        return null;
     }
 }

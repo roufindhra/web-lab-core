@@ -17,6 +17,8 @@ use Illuminate\Validation\Rule;
 
 class AlatController extends Controller
 {
+    private const SORTABLE = ['inventaris', 'nama_alat', 'serial_number', 'jumlah', 'lokasi_penyimpanan', 'ketersediaan'];
+
     /** field alat yang menyentuh identitas/kuota unit → butuh crud_inventaris */
     private const FIELD_BUCKET_CRUD = ['inventaris', 'nama_alat', 'merk', 'tipe', 'serial_number', 'lokasi_penyimpanan', 'jumlah'];
 
@@ -33,24 +35,29 @@ class AlatController extends Controller
             'ketersediaan' => ['nullable', 'in:'.implode(',', Alat::KETERSEDIAAN_STATUSES)],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'sort_direction' => ['nullable', 'in:asc,desc'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $alat = Alat::query()
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('inventaris', 'ilike', "%{$search}%")
-                        ->orWhere('nama_alat', 'ilike', "%{$search}%")
-                        ->orWhere('merk', 'ilike', "%{$search}%")
-                        ->orWhere('tipe', 'ilike', "%{$search}%")
-                        ->orWhere('serial_number', 'ilike', "%{$search}%")
-                        ->orWhere('lokasi_penyimpanan', 'ilike', "%{$search}%");
-                });
-            })
-            ->when($validated['ketersediaan'] ?? null, fn ($query, string $ketersediaan) => $query
-                ->where('ketersediaan', $ketersediaan))
-            ->orderBy('nama_alat', $validated['sort_direction'] ?? 'asc')
-            ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
+        $alat = $this->applySort(
+            Alat::query()
+                ->when($validated['search'] ?? null, function ($query, string $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('inventaris', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('nama_alat', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('merk', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('tipe', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('serial_number', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('lokasi_penyimpanan', $this->likeOperator(), "%{$search}%");
+                    });
+                })
+                ->when($validated['ketersediaan'] ?? null, fn ($query, string $ketersediaan) => $query
+                    ->where('ketersediaan', $ketersediaan)),
+            $validated,
+            self::SORTABLE,
+            'nama_alat',
+            'asc',
+            ['id'],
+        )->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
         return $this->crud->paginated($alat, AlatResource::class);
     }

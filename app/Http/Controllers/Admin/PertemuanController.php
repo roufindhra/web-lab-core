@@ -105,11 +105,13 @@ class PertemuanController extends Controller
         foreach ($data['nilai'] as $mahasiswaId => $values) {
             if (! is_numeric($mahasiswaId) || ! Mahasiswa::whereKey($mahasiswaId)->exists()) {
                 $errors[] = "Mahasiswa {$mahasiswaId} tidak ditemukan.";
+
                 continue;
             }
 
             if (! is_array($values)) {
                 $errors[] = "Nilai mahasiswa {$mahasiswaId} tidak valid.";
+
                 continue;
             }
 
@@ -117,10 +119,12 @@ class PertemuanController extends Controller
             foreach ($values as $nama => $value) {
                 if (! in_array($nama, $parameterNama, true)) {
                     $errors[] = "Parameter '{$nama}' tidak ada pada pertemuan {$pertemuan->nomor}.";
+
                     continue;
                 }
                 if ($value !== null && (! is_numeric($value) || $value < 0 || $value > 100)) {
                     $errors[] = "Nilai '{$nama}' mahasiswa {$mahasiswaId} harus angka 0-100.";
+
                     continue;
                 }
                 if ($value !== null && $value !== '') {
@@ -141,6 +145,7 @@ class PertemuanController extends Controller
                         ->where('pertemuan_id', $pertemuan->id)
                         ->where('mahasiswa_id', $mahasiswaId)
                         ->delete();
+
                     continue;
                 }
 

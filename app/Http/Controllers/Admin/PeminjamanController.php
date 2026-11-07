@@ -20,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class PeminjamanController extends Controller
 {
+    private const SORTABLE = ['created_at', 'nama', 'nim', 'keperluan', 'status', 'tanggal_pinjam', 'tanggal_kembali'];
+
     public function __construct(
         private readonly PeminjamanService $peminjaman,
         private readonly CrudService $crud,
@@ -88,27 +90,33 @@ class PeminjamanController extends Controller
             'date_to' => ['nullable', 'date'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $peminjaman = Peminjaman::query()
-            ->with('items.alat')
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('nama', 'ilike', "%{$search}%")
-                        ->orWhere('nim', 'ilike', "%{$search}%")
-                        ->orWhere('keperluan', 'ilike', "%{$search}%")
-                        ->orWhereHas('items', fn ($query) => $query
-                            ->where('inventaris', 'ilike', "%{$search}%"));
-                });
-            })
-            ->when($validated['status'] ?? null, fn ($query, string $status) => $query
-                ->where('status', $status))
-            ->when($validated['date_from'] ?? null, fn ($query, string $date) => $query
-                ->whereDate('created_at', '>=', $date))
-            ->when($validated['date_to'] ?? null, fn ($query, string $date) => $query
-                ->whereDate('created_at', '<=', $date))
-            ->latest()
-            ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
+        $peminjaman = $this->applySort(
+            Peminjaman::query()
+                ->with('items.alat')
+                ->when($validated['search'] ?? null, function ($query, string $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('nama', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('nim', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('keperluan', $this->likeOperator(), "%{$search}%")
+                            ->orWhereHas('items', fn ($query) => $query
+                                ->where('inventaris', $this->likeOperator(), "%{$search}%"));
+                    });
+                })
+                ->when($validated['status'] ?? null, fn ($query, string $status) => $query
+                    ->where('status', $status))
+                ->when($validated['date_from'] ?? null, fn ($query, string $date) => $query
+                    ->whereDate('created_at', '>=', $date))
+                ->when($validated['date_to'] ?? null, fn ($query, string $date) => $query
+                    ->whereDate('created_at', '<=', $date)),
+            $validated,
+            self::SORTABLE,
+            'created_at',
+            'desc',
+            ['id'],
+        )->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
         $this->tandaiCanProcess($request->user(), $peminjaman->getCollection());
 
