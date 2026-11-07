@@ -8,8 +8,8 @@ use App\Http\Resources\PraktikumResource;
 use App\Models\Dosen;
 use App\Models\Praktikum;
 use App\Models\PraktikumJadwal;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PublicController extends Controller
 {

@@ -11,6 +11,8 @@ use Illuminate\Validation\Rule;
 
 class HargaSewaController extends Controller
 {
+    private const SORTABLE = ['nama_alat', 'tarif_per_hari'];
+
     public function __construct(
         private readonly CrudService $crud,
     ) {}
@@ -21,13 +23,19 @@ class HargaSewaController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $hargaSewa = HargaSewa::query()
-            ->when($validated['search'] ?? null, fn ($query, string $search) => $query
-                ->where('nama_alat', 'ilike', "%{$search}%"))
-            ->orderBy('nama_alat')
-            ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
+        $hargaSewa = $this->applySort(
+            HargaSewa::query()
+                ->when($validated['search'] ?? null, fn ($query, string $search) => $query
+                    ->where('nama_alat', $this->likeOperator(), "%{$search}%")),
+            $validated,
+            self::SORTABLE,
+            'nama_alat',
+            'asc',
+            ['id'],
+        )->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
         return $this->crud->paginated($hargaSewa);
     }

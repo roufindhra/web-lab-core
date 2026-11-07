@@ -11,9 +11,9 @@ use Illuminate\Http\Request;
 
 class AlatLogController extends Controller
 {
-    public function __construct(private readonly CrudService $crud)
-    {
-    }
+    private const SORTABLE = ['created_at', 'id_log', 'keperluan', 'nama_pic', 'inventaris', 'status'];
+
+    public function __construct(private readonly CrudService $crud) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -23,24 +23,30 @@ class AlatLogController extends Controller
             'keperluan' => ['nullable', 'string', 'max:50'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ...$this->sortRules(self::SORTABLE),
         ]);
 
-        $log = AlatLog::query()
-            ->with(['alat' => fn ($query) => $query->withTrashed()])
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('id_log', 'ilike', "%{$search}%")
-                        ->orWhere('inventaris', 'ilike', "%{$search}%")
-                        ->orWhere('nim_pic', 'like', "{$search}%")
-                        ->orWhere('nama_pic', 'ilike', "%{$search}%");
-                });
-            })
-            ->when($validated['status'] ?? null, fn ($query, string $status) => $query
-                ->where('status', $status))
-            ->when($validated['keperluan'] ?? null, fn ($query, string $keperluan) => $query
-                ->where('keperluan', $keperluan))
-            ->latest()
-            ->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
+        $log = $this->applySort(
+            AlatLog::query()
+                ->with(['alat' => fn ($query) => $query->withTrashed()])
+                ->when($validated['search'] ?? null, function ($query, string $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('id_log', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('inventaris', $this->likeOperator(), "%{$search}%")
+                            ->orWhere('nim_pic', $this->likeOperator(), "{$search}%")
+                            ->orWhere('nama_pic', $this->likeOperator(), "%{$search}%");
+                    });
+                })
+                ->when($validated['status'] ?? null, fn ($query, string $status) => $query
+                    ->where('status', $status))
+                ->when($validated['keperluan'] ?? null, fn ($query, string $keperluan) => $query
+                    ->where('keperluan', $keperluan)),
+            $validated,
+            self::SORTABLE,
+            'created_at',
+            'desc',
+            ['id'],
+        )->paginate(perPage: $validated['per_page'] ?? 15, page: $validated['page'] ?? null);
 
         return $this->crud->paginated($log, AlatLogResource::class);
     }

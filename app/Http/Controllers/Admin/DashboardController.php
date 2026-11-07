@@ -8,10 +8,12 @@ use App\Models\Peminjaman;
 use App\Models\Praktikum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
 {
     private const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
     private const JADWAL_HARI = 8;
 
     public function index(): JsonResponse
@@ -93,10 +95,10 @@ class DashboardController extends Controller
     /**
      * Praktikum aktif beserta jadwalnya yang jatuh pada kumpulan nama hari.
      *
-     * @param  \Illuminate\Support\Collection<int, string>  $namaHari
-     * @return \Illuminate\Support\Collection<int, Praktikum>
+     * @param  Collection<int, string>  $namaHari
+     * @return Collection<int, Praktikum>
      */
-    private function praktikumDenganJadwal(\Illuminate\Support\Collection $namaHari): \Illuminate\Support\Collection
+    private function praktikumDenganJadwal(Collection $namaHari): Collection
     {
         return Praktikum::query()
             ->where('is_active', true)
@@ -112,10 +114,10 @@ class DashboardController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Praktikum>  $praktikum
+     * @param  Collection<int, Praktikum>  $praktikum
      * @return array<int, array{praktikum: string, slug: string, plug: string, jam_mulai: ?string, jam_selesai: ?string}>
      */
-    private function sesiUntukHari(\Illuminate\Support\Collection $praktikum, string $hari): array
+    private function sesiUntukHari(Collection $praktikum, string $hari): array
     {
         return $praktikum
             ->flatMap(fn (Praktikum $praktikum) => $praktikum->jadwal

@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class KurikulumController extends Controller
 {
-    public function __construct(private readonly HtmlSanitizer $sanitizer)
-    {
-    }
+    public function __construct(private readonly HtmlSanitizer $sanitizer) {}
 
     public function index(Request $request, Praktikum $praktikum): JsonResponse
     {
@@ -22,11 +20,18 @@ class KurikulumController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $operator = $this->likeOperator();
+
         $kurikulums = $praktikum->kurikulums()
-            ->when($validated['search'] ?? null, function ($query, string $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('materi_nama', 'ilike', "%{$search}%")
-                        ->orWhereRaw("regexp_replace(deskripsi, '<[^>]*>', ' ', 'g') ilike ?", ["%{$search}%"]);
+            ->when($validated['search'] ?? null, function ($query, string $search) use ($operator) {
+                $query->where(function ($query) use ($search, $operator) {
+                    $query->where('materi_nama', $operator, "%{$search}%");
+
+                    if ($operator === 'ilike') {
+                        $query->orWhereRaw("regexp_replace(deskripsi, '<[^>]*>', ' ', 'g') ilike ?", ["%{$search}%"]);
+                    } else {
+                        $query->orWhere('deskripsi', 'like', "%{$search}%");
+                    }
                 });
             })
             ->orderBy('materi_id')
