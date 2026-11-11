@@ -45,7 +45,8 @@ return new class extends Migration
             $table->foreignId('praktikum_id')->constrained('praktikum_nama')->cascadeOnDelete();
             $table->foreignId('materi_id')->constrained('praktikum_kurikulum')->restrictOnDelete();
             $table->smallInteger('nomor');
-            $table->date('tanggal')->nullable();
+            $table->date('tanggal_mulai');
+            $table->date('tanggal_selesai')->nullable();
             $table->smallInteger('bobot');
             $table->jsonb('parameter');
         });
