@@ -1,0 +1,12 @@
+# Web server (nginx) untuk Laravel.
+#
+# Dibangun dari context yang sama dengan image backend supaya file public/
+# selalu sinkron dengan versi aplikasi yang dijalankan PHP-FPM. Sebelumnya
+# service laravel-web memakai `volumes_from: laravel-api`, yang tidak memount
+# apa pun karena image backend tidak mendeklarasikan VOLUME.
+FROM nginx:alpine
+
+COPY public /var/www/html/public
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

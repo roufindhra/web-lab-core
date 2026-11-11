@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'praktikum_id',
     'materi_id',
     'nomor',
-    'tanggal',
+    'tanggal_mulai',
+    'tanggal_selesai',
     'bobot',
     'parameter',
 ])]
@@ -23,7 +24,8 @@ class PraktikumPertemuan extends Model
     {
         return [
             'nomor' => 'integer',
-            'tanggal' => 'date',
+            'tanggal_mulai' => 'date:Y-m-d',
+            'tanggal_selesai' => 'date:Y-m-d',
             'bobot' => 'integer',
             'parameter' => 'array',
         ];
