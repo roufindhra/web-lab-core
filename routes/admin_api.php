@@ -45,6 +45,8 @@ Route::middleware(['auth:sanctum', 'role:dosen,asisten'])->group(function (): vo
         Route::put('/praktikum/{praktikum:praktikum_slug}/plugs/{plug}/mahasiswa', [PraktikumController::class, 'syncMahasiswa'])
             ->middleware('ampu-plug');
         Route::put('/praktikum/{praktikum:praktikum_slug}/mahasiswa/{mahasiswa}/kelompok', [PraktikumController::class, 'updateKelompok']);
+        Route::put('/praktikum/{praktikum:praktikum_slug}/plugs/{plug}/kelompok', [PraktikumController::class, 'syncKelompok'])
+            ->middleware('ampu-plug');
         Route::get('/praktikum/{praktikum:praktikum_slug}/kurikulum', [KurikulumController::class, 'index']);
         Route::post('/praktikum/{praktikum:praktikum_slug}/kurikulum', [KurikulumController::class, 'store']);
         Route::put('/praktikum/{praktikum:praktikum_slug}/kurikulum/reorder', [KurikulumController::class, 'reorder']);

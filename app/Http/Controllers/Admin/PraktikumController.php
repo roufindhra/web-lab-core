@@ -278,6 +278,47 @@ class PraktikumController extends Controller
         return response()->json(['message' => "Peserta plug {$plug} diperbarui."]);
     }
 
+    public function syncKelompok(Request $request, Praktikum $praktikum, string $plug): JsonResponse
+    {
+        $slug = $praktikum->praktikum_slug;
+        $plug = urldecode($plug);
+
+        if (! $praktikum->jadwal()->where('plug', $plug)->exists()) {
+            return response()->json([
+                'message' => "Jadwal untuk plug {$plug} pada praktikum {$slug} tidak ditemukan.",
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'kelompok' => ['required', 'array'],
+            'kelompok.*' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $assigned = Mahasiswa::query()
+            ->get()
+            ->filter(fn (Mahasiswa $mahasiswa) => (($mahasiswa->praktikum_plug ?? [])[$slug] ?? null) === $plug);
+
+        DB::transaction(function () use ($assigned, $data, $slug) {
+            foreach ($assigned as $mahasiswa) {
+                $kelompokMap = $mahasiswa->praktikum_kelompok ?? [];
+                $value = $data['kelompok'][(string) $mahasiswa->id] ?? null;
+                $value = is_string($value) ? trim($value) : null;
+
+                if ($value === null || $value === '') {
+                    unset($kelompokMap[$slug]);
+                } else {
+                    $kelompokMap[$slug] = $value;
+                }
+
+                if (($mahasiswa->praktikum_kelompok ?? []) !== $kelompokMap) {
+                    $mahasiswa->update(['praktikum_kelompok' => $kelompokMap]);
+                }
+            }
+        });
+
+        return response()->json(['message' => "Kelompok peserta plug {$plug} diperbarui."]);
+    }
+
     public function updateKelompok(Request $request, Praktikum $praktikum, Mahasiswa $mahasiswa): JsonResponse
     {
         $slug = $praktikum->praktikum_slug;
